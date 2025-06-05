@@ -2,15 +2,15 @@ extends layout
 
 block content
   h1= title
-  p Welcome to #[em LocalLibrary], a very basic Express website developed as a tutorial example on the Mozilla Developer Network.
+  p ようこそ、#[em LocalLibrary] へ。これは Mozilla Developer Network のチュートリアル例として開発された、非常に基本的な Express ウェブサイトです。
 
-  h1 Dynamic content
+  h1 データベースの統計
 
-  p The library has the following record counts:
+  p 現在のライブラリには以下の記録があります:
 
   ul
-    li #[strong Books:] !{book_count}
-    li #[strong Copies:] !{book_instance_count}
-    li #[strong Copies available:] !{book_instance_available_count}
-    li #[strong Authors:] !{author_count}
-    li #[strong Genres:] !{genre_count}
+    li #[strong 書籍数:] !{book_count}
+    li #[strong 蔵書インスタンス数:] !{book_instance_count}
+    li #[strong 貸出可能な蔵書:] !{book_instance_available_count}
+    li #[strong 著者数:] !{author_count}
+    li #[strong ジャンル数:] !{genre_count}

@@ -6,8 +6,8 @@ const BookInstance = require("../models/bookinstance");
 const { body, validationResult } = require("express-validator");
 const asyncHandler = require("express-async-handler");
 
+// ホームページを表示（統計情報）
 exports.index = asyncHandler(async (req, res, next) => {
-  // Get details of books, book instances, authors and genre counts (in parallel)
   const [
     numBooks,
     numBookInstances,
@@ -23,7 +23,7 @@ exports.index = asyncHandler(async (req, res, next) => {
   ]);
 
   res.render("index", {
-    title: "Local Library Home",
+    title: "ローカル図書館 ホーム",
     book_count: numBooks,
     book_instance_count: numBookInstances,
     book_instance_available_count: numAvailableBookInstances,
@@ -32,27 +32,25 @@ exports.index = asyncHandler(async (req, res, next) => {
   });
 });
 
-// Display list of all books.
+// 書籍一覧ページを表示
 exports.book_list = asyncHandler(async (req, res, next) => {
   const allBooks = await Book.find({}, "title author")
     .sort({ title: 1 })
     .populate("author")
     .exec();
 
-  res.render("book_list", { title: "Book List", book_list: allBooks });
+  res.render("book_list", { title: "書籍一覧", book_list: allBooks });
 });
 
-// Display detail page for a specific book.
+// 書籍詳細ページを表示
 exports.book_detail = asyncHandler(async (req, res, next) => {
-  // Get details of books, book instances for specific book
   const [book, bookInstances] = await Promise.all([
     Book.findById(req.params.id).populate("author").populate("genre").exec(),
     BookInstance.find({ book: req.params.id }).exec(),
   ]);
 
   if (book === null) {
-    // No results.
-    const err = new Error("Book not found");
+    const err = new Error("書籍が見つかりません");
     err.status = 404;
     return next(err);
   }
@@ -64,24 +62,22 @@ exports.book_detail = asyncHandler(async (req, res, next) => {
   });
 });
 
-// Display book create form on GET.
+// 書籍作成フォームを表示（GET）
 exports.book_create_get = asyncHandler(async (req, res, next) => {
-  // Get all authors and genres, which we can use for adding to our book.
   const [allAuthors, allGenres] = await Promise.all([
     Author.find().sort({ family_name: 1 }).exec(),
     Genre.find().sort({ name: 1 }).exec(),
   ]);
 
   res.render("book_form", {
-    title: "Create Book",
+    title: "書籍の作成",
     authors: allAuthors,
     genres: allGenres,
   });
 });
 
-// Handle book create on POST.
+// 書籍作成フォームを処理（POST）
 exports.book_create_post = [
-  // Convert the genre to an array.
   (req, res, next) => {
     if (!Array.isArray(req.body.genre)) {
       req.body.genre =
@@ -90,28 +86,15 @@ exports.book_create_post = [
     next();
   },
 
-  // Validate and sanitize fields.
-  body("title", "Title must not be empty.")
-    .trim()
-    .isLength({ min: 1 })
-    .escape(),
-  body("author", "Author must not be empty.")
-    .trim()
-    .isLength({ min: 1 })
-    .escape(),
-  body("summary", "Summary must not be empty.")
-    .trim()
-    .isLength({ min: 1 })
-    .escape(),
-  body("isbn", "ISBN must not be empty").trim().isLength({ min: 1 }).escape(),
+  body("title", "タイトルは必須です。").trim().isLength({ min: 1 }).escape(),
+  body("author", "著者は必須です。").trim().isLength({ min: 1 }).escape(),
+  body("summary", "概要は必須です。").trim().isLength({ min: 1 }).escape(),
+  body("isbn", "ISBNは必須です。").trim().isLength({ min: 1 }).escape(),
   body("genre.*").escape(),
-  // Process request after validation and sanitization.
 
   asyncHandler(async (req, res, next) => {
-    // Extract the validation errors from a request.
     const errors = validationResult(req);
 
-    // Create a Book object with escaped and trimmed data.
     const book = new Book({
       title: req.body.title,
       author: req.body.author,
@@ -121,36 +104,32 @@ exports.book_create_post = [
     });
 
     if (!errors.isEmpty()) {
-      // There are errors. Render form again with sanitized values/error messages.
-
-      // Get all authors and genres for form.
       const [allAuthors, allGenres] = await Promise.all([
         Author.find().sort({ family_name: 1 }).exec(),
         Genre.find().sort({ name: 1 }).exec(),
       ]);
 
-      // Mark our selected genres as checked.
       for (const genre of allGenres) {
         if (book.genre.indexOf(genre._id) > -1) {
           genre.checked = "true";
         }
       }
+
       res.render("book_form", {
-        title: "Create Book",
+        title: "書籍の作成",
         authors: allAuthors,
         genres: allGenres,
         book: book,
         errors: errors.array(),
       });
     } else {
-      // Data from form is valid. Save book.
       await book.save();
       res.redirect(book.url);
     }
   }),
 ];
 
-// Display book delete form on GET.
+// 書籍削除フォームを表示（GET）
 exports.book_delete_get = asyncHandler(async (req, res, next) => {
   const [book, bookInstances] = await Promise.all([
     Book.findById(req.params.id).populate("author").populate("genre").exec(),
@@ -158,49 +137,42 @@ exports.book_delete_get = asyncHandler(async (req, res, next) => {
   ]);
 
   if (book === null) {
-    // No results.
     res.redirect("/catalog/books");
   }
 
   res.render("book_delete", {
-    title: "Delete Book",
+    title: "書籍の削除",
     book: book,
     book_instances: bookInstances,
   });
 });
 
-// Handle book delete on POST.
+// 書籍削除を処理（POST）
 exports.book_delete_post = asyncHandler(async (req, res, next) => {
-  // Assume the post has valid id (ie no validation/sanitization).
-
   const [book, bookInstances] = await Promise.all([
     Book.findById(req.params.id).populate("author").populate("genre").exec(),
     BookInstance.find({ book: req.params.id }).exec(),
   ]);
 
   if (book === null) {
-    // No results.
     res.redirect("/catalog/books");
   }
 
   if (bookInstances.length > 0) {
-    // Book has book_instances. Render in same way as for GET route.
     res.render("book_delete", {
-      title: "Delete Book",
+      title: "書籍の削除",
       book: book,
       book_instances: bookInstances,
     });
     return;
   } else {
-    // Book has no BookInstance objects. Delete object and redirect to the list of books.
     await Book.findByIdAndDelete(req.body.id);
     res.redirect("/catalog/books");
   }
 });
 
-// Display book update form on GET.
+// 書籍更新フォームを表示（GET）
 exports.book_update_get = asyncHandler(async (req, res, next) => {
-  // Get book, authors and genres for form.
   const [book, allAuthors, allGenres] = await Promise.all([
     Book.findById(req.params.id).populate("author").exec(),
     Author.find().sort({ family_name: 1 }).exec(),
@@ -208,28 +180,25 @@ exports.book_update_get = asyncHandler(async (req, res, next) => {
   ]);
 
   if (book === null) {
-    // No results.
-    const err = new Error("Book not found");
+    const err = new Error("書籍が見つかりません");
     err.status = 404;
     return next(err);
   }
 
-  // Mark our selected genres as checked.
   allGenres.forEach((genre) => {
     if (book.genre.includes(genre._id)) genre.checked = "true";
   });
 
   res.render("book_form", {
-    title: "Update Book",
+    title: "書籍の更新",
     authors: allAuthors,
     genres: allGenres,
     book: book,
   });
 });
 
-// Handle book update on POST.
+// 書籍更新を処理（POST）
 exports.book_update_post = [
-  // Convert the genre to an array.
   (req, res, next) => {
     if (!Array.isArray(req.body.genre)) {
       req.body.genre =
@@ -238,54 +207,38 @@ exports.book_update_post = [
     next();
   },
 
-  // Validate and sanitize fields.
-  body("title", "Title must not be empty.")
-    .trim()
-    .isLength({ min: 1 })
-    .escape(),
-  body("author", "Author must not be empty.")
-    .trim()
-    .isLength({ min: 1 })
-    .escape(),
-  body("summary", "Summary must not be empty.")
-    .trim()
-    .isLength({ min: 1 })
-    .escape(),
-  body("isbn", "ISBN must not be empty").trim().isLength({ min: 1 }).escape(),
+  body("title", "タイトルは必須です。").trim().isLength({ min: 1 }).escape(),
+  body("author", "著者は必須です。").trim().isLength({ min: 1 }).escape(),
+  body("summary", "概要は必須です。").trim().isLength({ min: 1 }).escape(),
+  body("isbn", "ISBNは必須です。").trim().isLength({ min: 1 }).escape(),
   body("genre.*").escape(),
 
-  // Process request after validation and sanitization.
   asyncHandler(async (req, res, next) => {
-    // Extract the validation errors from a request.
     const errors = validationResult(req);
 
-    // Create a Book object with escaped/trimmed data and old id.
     const book = new Book({
       title: req.body.title,
       author: req.body.author,
       summary: req.body.summary,
       isbn: req.body.isbn,
       genre: typeof req.body.genre === "undefined" ? [] : req.body.genre,
-      _id: req.params.id, // This is required, or a new ID will be assigned!
+      _id: req.params.id, // IDは更新対象の本と一致させる必要がある
     });
 
     if (!errors.isEmpty()) {
-      // There are errors. Render form again with sanitized values/error messages.
-
-      // Get all authors and genres for form
       const [allAuthors, allGenres] = await Promise.all([
         Author.find().sort({ family_name: 1 }).exec(),
         Genre.find().sort({ name: 1 }).exec(),
       ]);
 
-      // Mark our selected genres as checked.
       for (const genre of allGenres) {
         if (book.genre.includes(genre._id)) {
           genre.checked = "true";
         }
       }
+
       res.render("book_form", {
-        title: "Update Book",
+        title: "書籍の更新",
         authors: allAuthors,
         genres: allGenres,
         book: book,
@@ -293,9 +246,7 @@ exports.book_update_post = [
       });
       return;
     } else {
-      // Data from form is valid. Update the record.
       const thebook = await Book.findByIdAndUpdate(req.params.id, book, {});
-      // Redirect to book detail page.
       res.redirect(thebook.url);
     }
   }),
